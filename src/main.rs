@@ -28,11 +28,12 @@ impl Sorteador {
         }
         let sum = sum as f64;
         let mut probabilities = Vec::new();
-        probabilities.push(self.weights[0] as f64);
+        probabilities.push((self.weights[0] as f64)/(sum as f64));
         for i in 1..self.weights.len() {
-            probabilities.push(probabilities[i - 1] + (self.weights[i] as f64)/sum);
+            probabilities.push(probabilities[i - 1] + (self.weights[i] as f64) / sum);
         }
         self.probabilities = probabilities;
+        println!("Probabilities: {:?}", self.probabilities);
     }
 
     fn choose_value(&self, value: f64) -> usize {
@@ -58,7 +59,9 @@ impl Sorteador {
     }
 
     fn sample(&mut self) -> usize {
-        let value = self.generator.gen_range(0.0, self.probabilities.last().unwrap());
+        let value = self
+            .generator
+            .gen_range(0.0, self.probabilities.last().unwrap());
         self.choose_value(value)
     }
 }
@@ -103,12 +106,30 @@ mod tests {
     use super::*;
 
     fn simulate_with_weights(sorteador: &mut Sorteador, method: CheckMethod) -> f64 {
-    let n_iterations = 10000000;
-    match method {
-        CheckMethod::Trio => compute_trios(sorteador, n_iterations),
-        _ => compute_two_pairs(sorteador, n_iterations),
+        let n_iterations = 1000000;
+        match method {
+            CheckMethod::Trio => compute_trios(sorteador, n_iterations),
+            _ => compute_two_pairs(sorteador, n_iterations),
+        }
     }
-}
+
+    fn simulate_multiple_draws(sorteador: &mut Sorteador, n_iterations: usize) -> Vec<f64> {
+        let mut total = 0;
+        let mut result: Vec<f64> = Vec::new();
+        result.resize(sorteador.weights.len(), 0.0);
+        for _ in 0..n_iterations{
+            total = total + 1;
+            let sample = sorteador.sample();
+            result[sample] = result[sample] + 1.0;
+        }
+
+        for i in 0..sorteador.weights.len(){
+            result[i] = result[i]/(total as f64);
+        }
+
+        result
+    }
+
     #[test]
     fn test_honest_coin() {
         let weights = vec![1, 1];
@@ -116,7 +137,7 @@ mod tests {
         let trio_value = simulate_with_weights(&mut sorteador, CheckMethod::Trio);
         let two_pairs_value = simulate_with_weights(&mut sorteador, CheckMethod::TwoPairs);
         println!("Moeda: trio: {} pares: {}", trio_value, two_pairs_value);
-        assert!((two_pairs_value - trio_value).abs() < 0.000001);
+        assert!((two_pairs_value - trio_value).abs() < 0.05);
     }
     #[test]
     fn test_honest_die() {
@@ -126,5 +147,18 @@ mod tests {
         let two_pairs_value = simulate_with_weights(&mut sorteador, CheckMethod::TwoPairs);
         println!("Dado: trio: {} pares: {}", trio_value, two_pairs_value);
         assert!((two_pairs_value - trio_value).abs() < 0.05);
+    }
+
+    #[test]
+    fn test_consistency() {
+        let weights = vec![1, 1, 1, 1, 1];
+        let mut sorteador = Sorteador::new(weights);
+
+        let n_iterations = 100000;
+        let result = simulate_multiple_draws(&mut sorteador, n_iterations);
+        println!("{:?}", result);
+        for i in 0..result.len() {
+            assert!((result[i] - 0.2).abs() < 0.05);
+        }
     }
 }
